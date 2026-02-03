@@ -12,7 +12,7 @@ lib/
 include/
 
 # === 3. Python 캐시 및 컴파일 파일 ===
-__pycache__/        # 런타임 시 생성되는 바이트코드 캐시
+__pycache__        # 런타임 시 생성되는 바이트코드 캐시
 *.py[cod]           # .pyc, .pyo, .pyd 파일
 *$py.class
 
@@ -26,3 +26,6 @@ Thumbs.db           # Windows 전용 썸네일 파일
 build/
 dist/
 *.egg-info/
+
+# === 5. AI AGENTS ===
+.claude
