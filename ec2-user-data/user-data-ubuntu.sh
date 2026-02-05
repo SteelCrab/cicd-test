@@ -29,3 +29,16 @@ curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip
 unzip awscliv2.zip
 ./aws/install
 rm -rf awscliv2.zip aws/
+
+# 5. 최신 Docker 이미지 자동 배포 (인스턴스 최초 시작 시)
+# EC2 메타데이터에서 리전 정보 가져오기
+AWS_REGION=$(ec2-metadata --availability-zone | sed 's/.*: \(.*\).$/\1/')
+ECR_REGISTRY="__ACCOUNT_ID__.dkr.ecr.${AWS_REGION}.amazonaws.com"
+ECR_REPO="pista/web"
+
+# ECR 로그인
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+# latest 이미지 pull 및 실행
+docker pull $ECR_REGISTRY/$ECR_REPO:latest
+docker run -d --name nginx-server -p 80:80 $ECR_REGISTRY/$ECR_REPO:latest
