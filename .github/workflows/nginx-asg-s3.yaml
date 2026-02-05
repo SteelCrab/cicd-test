@@ -1,14 +1,14 @@
 # 워크플로우의 이름입니다. GitHub Actions 탭에서 이 이름으로 표시됩니다.
-name: Nginx-Deployment-Pipeline
+name: Nginx-ASG-Pipeline
 
 # 트리거 설정: 어떤 이벤트가 발생했을 때 이 파이프라인을 실행할지 결정합니다.
 on:
   push:
-    branches: ["ci/asg-s3"] # main 브랜치에 코드가 push될 때 실행
+    branches: ["ci/asg"] # main 브랜치에 코드가 push될 때 실행
     paths:
       - "nginx/**"
   pull_request:
-    branches: ["ci/asg-s3"] # main 브랜치로 PR이 생성될 때 실행
+    branches: ["ci/asg"] # main 브랜치로 PR이 생성될 때 실행
     paths:
       - "nginx/**"
 
@@ -34,20 +34,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # IAM 사용자 비밀 키
           aws-region: ${{ secrets.AWS_REGION }} # 대상 AWS 리전 (예: ap-northeast-2)
 
-      # 3단계: 자주 바뀌는 설정 파일과 HTML 정적 자산을 S3 버킷에 업로드합니다.
-      - name: Upload Config and Assets to S3
-        run: |
-          # default.conf 파일을 S3의 config 폴더로 복사합니다.
-          aws s3 cp ./nginx/html/default.conf s3://${{ secrets.S3_BUCKET_NAME }}/config/default.conf
-          # html 폴더 전체를 S3의 html 폴더와 동기화합니다. (--delete는 로컬에 없는 파일은 S3에서도 삭제)
-          aws s3 sync ./nginx/html/ s3://${{ secrets.S3_BUCKET_NAME }}/html/ --delete
-
-      # 4단계: Docker 이미지를 저장할 ECR 리포지토리에 로그인합니다.
+      # 3단계: Docker 이미지를 저장할 ECR 리포지토리에 로그인합니다.
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 5단계: Docker 이미지를 빌드하고 ECR에 업로드(Push)합니다.
+      # 4단계: Docker 이미지를 빌드하고 ECR에 업로드(Push)합니다.
       - name: Build and push Docker image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} # 로그인 단계에서 얻은 레지스트리 주소
@@ -60,7 +52,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      # 6단계: AWS SSM을 통해 ASG 인스턴스에 접속하여 실제 배포 명령을 내립니다.
+      # 5단계: AWS SSM을 통해 ASG 인스턴스에 접속하여 실제 배포 명령을 내립니다.
       - name: Deploy to ASG via SSM
         run: |
           # 1. 쉘 스크립트에서 사용할 변수를 정리합니다.
@@ -77,15 +69,6 @@ jobs:
             --region ${{ secrets.AWS_REGION }} \
             --parameters "{
               \"commands\": [
-                \"# EC2 내부: html 파일을 담을 디렉토리를 생성합니다.\",
-                \"sudo mkdir -p /home/ubuntu/app/html\",
-
-                \"# EC2 내부: S3에 올려둔 최신 설정 파일을 EC2 로컬로 다운로드합니다.\",
-                \"aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/config/default.conf /home/ubuntu/app/default.conf\",
-
-                \"# EC2 내부: S3의 html 자산들을 EC2 로컬 폴더와 동기화합니다.\",
-                \"aws s3 sync s3://${{ secrets.S3_BUCKET_NAME }}/html/ /home/ubuntu/app/html/ --delete\",
-
                 \"# EC2 내부: ECR에서 이미지를 가져오기 위해 Docker 로그인을 수행합니다.\",
                 \"aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | sudo docker login --username AWS --password-stdin $REGISTRY\",
 
@@ -96,12 +79,8 @@ jobs:
                 \"sudo docker stop nginx-server || true\",
                 \"sudo docker rm nginx-server || true\",
 
-                \"# EC2 내부: 새 이미지를 컨테이너로 실행합니다. \",
-                \"# 이때 -v 옵션으로 EC2에 다운로드한 S3 파일들을 컨테이너 내부와 연결(마운트)합니다.\",
-                \"sudo docker run -d --name nginx-server -p 80:80 \
-                  -v /home/ubuntu/app/default.conf:/etc/nginx/conf.d/default.conf \
-                  -v /home/ubuntu/app/html:/usr/share/nginx/html \
-                  $FULL_IMAGE\",
+                \"# EC2 내부: 새 이미지를 컨테이너로 실행합니다.\",
+                \"sudo docker run -d --name nginx-server -p 80:80 $FULL_IMAGE\",
 
                 \"# EC2 내부: 사용하지 않는 오래된 Docker 이미지들을 정리하여 용량을 확보합니다.\",
                 \"sudo docker image prune -f\"
