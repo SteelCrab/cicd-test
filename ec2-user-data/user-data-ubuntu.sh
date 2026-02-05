@@ -23,6 +23,10 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 # Docker 권한 설정 및 실행
 systemctl enable --now docker
 usermod -aG docker ubuntu
+usermod -aG docker root
+
+# Docker 소켓 권한 설정
+chmod 666 /var/run/docker.sock
 
 # 4. AWS CLI v2 설치 (ECR 로그인 및 SSM 통신에 필수)
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -31,10 +35,16 @@ unzip awscliv2.zip
 rm -rf awscliv2.zip aws/
 
 # 5. 최신 Docker 이미지 자동 배포 (인스턴스 최초 시작 시)
-# EC2 메타데이터에서 리전 정보 가져오기
+# EC2 메타데이터에서 리전과 계정 ID 자동 가져오기
 AWS_REGION=$(ec2-metadata --availability-zone | sed 's/.*: \(.*\).$/\1/')
-ECR_REGISTRY="__ACCOUNT_ID__.dkr.ecr.${AWS_REGION}.amazonaws.com"
-ECR_REPO="pista/web"
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# ========== 환경에 맞게 수정 필요 ==========
+ECR_REPO="YOUR_ECR_REPO_NAME"  # 예: pista/web, nginx-app 등
+# ==========================================
+
+# ECR 레지스트리 주소 자동 구성
+ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
 # ECR 로그인
 aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
