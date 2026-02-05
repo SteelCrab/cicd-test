@@ -62,7 +62,7 @@ jobs:
           FULL_IMAGE="$REGISTRY/$REPO:$TAG"
 
           # 2. SSM Send-Command를 통해  EC2 내부에서 실행할 명령어를 전달합니다.
-          aws ssm send-command \
+          COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:${{ secrets.ASG_TAG_KEY }},Values=${{ secrets.ASG_TAG_VALUE }}" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploying Nginx via GitHub Actions" \
@@ -85,4 +85,23 @@ jobs:
                 \"# EC2 내부: 사용하지 않는 오래된 Docker 이미지들을 정리하여 용량을 확보합니다.\",
                 \"sudo docker image prune -f\"
               ]
-            }"
+            }" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          # 3. 명령 실행 완료 대기 (최대 5분)
+          echo "Waiting for SSM command $COMMAND_ID to complete..."
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --region ${{ secrets.AWS_REGION }} \
+            --max-attempts 30 \
+            --delay 10
+
+          # 4. 명령 실행 결과 확인
+          echo "Checking command execution status..."
+          aws ssm list-command-invocations \
+            --command-id "$COMMAND_ID" \
+            --region ${{ secrets.AWS_REGION }} \
+            --details \
+            --query 'CommandInvocations[*].[InstanceId,Status,CommandPlugins[0].Output]' \
+            --output text
