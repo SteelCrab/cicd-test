@@ -6,6 +6,21 @@
 #
 # 트리거: ci/asg 브랜치의 nginx/** 경로에 push 또는 PR 생성 시 실행
 # 배포 대상: ASG_TAG_KEY=ASG_TAG_VALUE 태그를 가진 모든 EC2 인스턴스
+#
+# =============================================================================
+# 필요한 GitHub Secrets (총 6개)
+# =============================================================================
+# AWS 인증:
+#   - AWS_ACCESS_KEY_ID          : IAM 사용자 액세스 키 (예: AKIAIOSFODNN7EXAMPLE)
+#   - AWS_SECRET_ACCESS_KEY      : IAM 사용자 시크릿 키
+#   - AWS_REGION                 : AWS 리전 (예: ap-southeast-1)
+#
+# ECR 설정:
+#   - ECR_REPOSITORY             : ECR 리포지토리 이름 (예: pista/web)
+#
+# ASG 태그:
+#   - ASG_TAG_KEY                : EC2 태그 키 (예: Name)
+#   - ASG_TAG_VALUE              : EC2 태그 값 (예: pista-asg)
 # =============================================================================
 
 name: Nginx-ASG-Pipeline
