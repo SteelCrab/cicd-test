@@ -3,8 +3,7 @@
 # 1. SSM 에이전트 설치 (최우선 실행)
 # 인스턴스가 뜨자마자 AWS 콘솔에서 제어 가능하도록 먼저 설치합니다.
 snap install amazon-ssm-agent --classic
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+snap start amazon-ssm-agent
 
 # 2. 패키지 업데이트 및 필수 도구 설치
 apt-get update -y
