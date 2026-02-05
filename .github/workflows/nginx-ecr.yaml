@@ -1,0 +1,77 @@
+name: nginx-ecr pipeline
+
+on:
+  push:
+    branches: ["ci/ecr"]
+    paths:
+      - "nginx/html/**"
+  pull_request:
+    branches: ["ci/ecr"]
+    paths:
+      - "nginx/html/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # checkout
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section
+        with:
+          aws-access-key-id: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws-secret-access-key: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws-region: "${{ secrets.AWS_REGION }}"
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY }}"
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build with both 'latest' and specific commit tag
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./nginx/html/
+
+          # Push both tags
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Deploy to EC2 via SSM
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY }}"
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws ssm send-command \
+            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploying Nginx from ECR via SSM" \
+            --parameters '{
+              "commands": [
+                "# 1. EC2 내부에서 ECR 로그인 (12시간 유효한 임시 비밀번호 생성)",
+                "aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | sudo docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
+
+                "# 2. 최신 이미지 가져오기 (ECR에서 이미지 Pull)",
+                "sudo docker pull '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
+
+                "# 3. 기존 컨테이너 중지 및 삭제",
+                "sudo docker stop nginx-server || true",
+                "sudo docker rm nginx-server || true",
+
+                "# 4. 80번 포트로 실행 (ALB로부터의 트래픽을 수신)",
+                "sudo docker run -d --name nginx-server -p 80:80 '"$ECR_REGISTRY"'/'"$ECR_REPOSITORY"':'"$IMAGE_TAG"'",
+
+                "# 5. 오래된 이미지 정리",
+                "sudo docker image prune -f"
+              ]
+            }' \
+            --region ${{ secrets.AWS_REGION }}
