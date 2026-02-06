@@ -1,0 +1,142 @@
+# Nginx Web - ECR Build & EKS Deploy Pipeline
+# This workflow builds Nginx, pushes to ECR, and deploys to EKS with NLB
+
+name: Nginx Web EKS Deploy
+
+on:
+  push:
+    branches: ["main", "ci/eks"]
+    paths:
+      - "nginx/web/**"
+      - "eks_yaml/nginx-web/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "nginx/web/**"
+  workflow_dispatch:
+    inputs:
+      deploy_only:
+        description: 'Skip build and deploy directly'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NGINX_WEB }}
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
+
+jobs:
+  # ============================================
+  # 1단계: 빌드
+  # ============================================
+  build:
+    name: Build & Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Nginx config
+        run: |
+          docker run --rm -v ${{ github.workspace }}/nginx:/etc/nginx:ro nginx:alpine nginx -t
+
+  # ============================================
+  # 2단계: Docker 빌드 및 ECR 푸시
+  # ============================================
+  docker-build:
+    name: Docker Build & Push to ECR
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.meta.outputs.sha_short }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+                       -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                       ./nginx/
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          echo "✅ Pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  # ============================================
+  # 3단계: EKS 배포
+  # ============================================
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/eks'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+
+      - name: Deploy to EKS
+        run: |
+          # Deployment 및 Service 적용
+          kubectl apply -f eks_yaml/nginx-web/deployment.yaml
+          kubectl apply -f eks_yaml/nginx-web/service.yaml
+
+          # Rolling restart로 최신 이미지 반영
+          kubectl rollout restart deployment/nginx-web -n $K8S_NAMESPACE
+
+          # 배포 상태 확인
+          kubectl rollout status deployment/nginx-web -n $K8S_NAMESPACE --timeout=120s
+
+      - name: Verify deployment
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment nginx-web -n $K8S_NAMESPACE
+          echo ""
+          echo "=== Pods Status ==="
+          kubectl get pods -l app=nginx-web -n $K8S_NAMESPACE
+          echo ""
+          echo "=== LoadBalancer Status ==="
+          kubectl get svc pista-svc-nginx-web -n $K8S_NAMESPACE
+          echo ""
+          echo "=== LoadBalancer URL ==="
+          kubectl get svc pista-svc-nginx-web -n $K8S_NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+          echo ""
