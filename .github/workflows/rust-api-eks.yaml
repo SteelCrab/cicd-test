@@ -116,7 +116,8 @@ jobs:
     name: Deploy to EKS
     runs-on: ubuntu-latest
     needs: docker-build
-    if: github.event_name == 'workflow_dispatch'
+    # Explicitly check for workflow_dispatch with expression syntax
+    if: ${{ github.event_name == 'workflow_dispatch' }}
 
     steps:
       - uses: actions/checkout@v4
