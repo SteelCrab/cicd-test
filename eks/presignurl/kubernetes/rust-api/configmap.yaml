@@ -3,6 +3,6 @@ kind: ConfigMap
 metadata:
   name: rust-api-config
 data:
-  S3_BUCKET_NAME: "pista-s3"  # 사용자의 실제 버킷명으로 업데이트
+  S3_BUCKET_NAME: "<S3_BUCKET_NAME>"
   AWS_REGION: "ap-southeast-1"
   PRESIGNED_EXPIRY: "3600"

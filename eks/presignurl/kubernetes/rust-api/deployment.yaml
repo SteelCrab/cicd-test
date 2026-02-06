@@ -14,11 +14,10 @@ spec:
       labels:
         app: rust-api
     spec:
-      serviceAccountName: rust-api-sa
+      serviceAccountName: pista-rust-api-sa
       containers:
         - name: rust-api
-          # 실제 계정 ID 적용됨
-          image: __ACCOUNT_ID__.dkr.ecr.ap-southeast-1.amazonaws.com/rust-api:latest
+          image: <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/rust-api:latest
           ports:
             - containerPort: 8080
           # ConfigMap 참조로 변경

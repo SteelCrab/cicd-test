@@ -7,9 +7,10 @@ on:
   push:
     branches: ["main", "ci/eks-rust"]
     paths:
-      - "rust-api/**"
-      - "eks_yaml/rust-api/**"
-      - ".github/workflows/**"
+      - "eks/presignurl/projects/rs-presign/**"
+      - "eks/presignurl/kubernetes/rust-api/**"
+      - "eks/presignurl/overlays/production/rust-api/**"
+      - ".github/workflows/rust-api-eks.yaml"
   workflow_dispatch:
     inputs:
       deploy_only:
@@ -51,16 +52,16 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            rust-api/target
+            eks/presignurl/projects/rs-presign/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
-        working-directory: rust-api
+        working-directory: eks/presignurl/projects/rs-presign
         run: |
           cargo test --release
 
       - name: Run clippy
-        working-directory: rust-api
+        working-directory: eks/presignurl/projects/rs-presign
         run: |
           cargo clippy -- -D warnings
 
@@ -73,7 +74,7 @@ jobs:
     needs: build
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
+      image_tag: ${{ steps.meta.outputs.sha_short }}
 
     steps:
       - uses: actions/checkout@v4
@@ -102,7 +103,7 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
                        -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                       ./rust-api/
+                       ./eks/presignurl/projects/rs-presign/
 
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -132,18 +133,20 @@ jobs:
         run: |
           aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Deploy to EKS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.docker-build.outputs.image_tag }}
         run: |
-          # ConfigMap & ServiceAccount 먼저 적용
-          kubectl apply -f eks_yaml/rust-api/configmap.yaml
-          kubectl apply -f eks_yaml/rust-api/service-account.yaml
-          kubectl apply -f eks_yaml/rust-api/service.yaml
-
-          # Deployment 적용 (이미지 태그 업데이트)
-          kubectl apply -f eks_yaml/rust-api/deployment.yaml
-
-          # Rolling restart로 최신 이미지 반영
-          kubectl rollout restart deployment/rust-api -n $K8S_NAMESPACE
+          # Kustomize로 이미지 태그 설정 후 배포
+          cd eks/presignurl/overlays/production/rust-api
+          kustomize edit set image \
+            "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/rust-api=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          kubectl apply -k . -n $K8S_NAMESPACE
 
           # 배포 상태 확인
           kubectl rollout status deployment/rust-api -n $K8S_NAMESPACE --timeout=120s

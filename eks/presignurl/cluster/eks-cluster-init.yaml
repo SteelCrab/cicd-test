@@ -10,7 +10,7 @@ metadata:
 
 # 기존 VPC 및 서브넷 활용 설정
 vpc:
-  id: vpc-067604da147fbd40a
+  id: <VPC_ID>
   # 클러스터 API 서버 접근 제어
   clusterEndpoints:
     publicAccess: true # 외부에서 kubectl 접근 허용
@@ -21,14 +21,14 @@ vpc:
   subnets:
     # 외부 로드밸런서가 위치할 퍼블릭 서브넷 (elb 태그 필요)
     public:
-      ap-southeast-1a: { id: subnet-0f088b6509fe031b3 }
-      ap-southeast-1b: { id: subnet-0c4132c130561f5b6 }
-      ap-southeast-1c: { id: subnet-0b027cd2c6bd27b4b }
+      ap-southeast-1a: { id: <PUBLIC_SUBNET_1A> }
+      ap-southeast-1b: { id: <PUBLIC_SUBNET_1B> }
+      ap-southeast-1c: { id: <PUBLIC_SUBNET_1C> }
     # 실제 워커 노드가 위치할 프라이빗 서브넷 (internal-elb 태그 필요)
     private:
-      ap-southeast-1a: { id: subnet-02a6f3654c4525250 }
-      ap-southeast-1b: { id: subnet-0ff40cb6c629d5200 }
-      ap-southeast-1c: { id: subnet-03f3128d159e662d2 }
+      ap-southeast-1a: { id: <PRIVATE_SUBNET_1A> }
+      ap-southeast-1b: { id: <PRIVATE_SUBNET_1B> }
+      ap-southeast-1c: { id: <PRIVATE_SUBNET_1C> }
 
 # 관리형 노드 그룹(Managed Node Group) 설정
 managedNodeGroups:
@@ -40,7 +40,7 @@ managedNodeGroups:
     volumeSize: 20
     privateNetworking: true
     securityGroups:
-      attachIDs: [sg-03c40d9a7665fd3d8]
+      attachIDs: [<NODE_SG_ID>]
     iam:
       withAddonPolicies:
         imageBuilder: true # ECR 이미지 접근 권한
