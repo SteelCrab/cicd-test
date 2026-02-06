@@ -47,7 +47,9 @@ jobs:
 
       - name: Validate Nginx config
         run: |
-          docker run --rm -v ${{ github.workspace }}/nginx:/etc/nginx:ro nginx:alpine nginx -t
+          # Dockerfile 빌드 테스트 (mime.types 포함된 베이스 이미지 사용)
+          docker build -t nginx-test ./nginx/
+          docker run --rm nginx-test nginx -t
 
   # ============================================
   # 2단계: Docker 빌드 및 ECR 푸시
