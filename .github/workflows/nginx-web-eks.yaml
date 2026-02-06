@@ -9,10 +9,12 @@ on:
     paths:
       - "nginx/**"
       - "eks_yaml/nginx-web/**"
+      - ".github/workflows/**"
   pull_request:
     branches: ["main"]
     paths:
       - "nginx/**"
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       deploy_only:
@@ -101,7 +103,7 @@ jobs:
     name: Deploy to EKS
     runs-on: ubuntu-latest
     needs: docker-build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/eks' || github.ref == 'refs/heads/ci/eks-rust'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/eks' || github.ref == 'refs/heads/ci/eks-rust'))
 
     steps:
       - uses: actions/checkout@v4
