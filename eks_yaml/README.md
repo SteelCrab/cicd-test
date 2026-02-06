@@ -101,9 +101,21 @@ gh secret set ECR_REPOSITORY_NGINX_WEB --body "nginx-web"
 | :--- | :--- |
 | `AWS_ACCESS_KEY_ID` | AWS IAM Access Key |
 | `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Key |
+| `AWS_REGION` | AWS 리전 (예: `ap-southeast-1`) |
+| `ECR_REPOSITORY_RUST_API` | Rust API ECR 리포지토리 이름 |
+| `ECR_REPOSITORY_NGINX_WEB` | Nginx Web ECR 리포지토리 이름 |
+| `EKS_CLUSTER_NAME` | EKS 클러스터 이름 |
+| `K8S_NAMESPACE` | Kubernetes 네임스페이스 |
+
+### GitHub Environment 설정
+
+Deploy job은 `production` Environment의 승인을 거쳐 실행됩니다.
+
+**설정 방법:** Settings → Environments → New environment → `production`
+- **Required reviewers** 체크 → 승인자 추가
 
 ### 배포 흐름
 
 ```
-Push to main/ci/eks → Build & Test → ECR Push → kubectl apply → Rolling Restart
+Push to main/ci/eks → Build & Test → ECR Push → [승인 대기] → kubectl apply → Rolling Restart
 ```
