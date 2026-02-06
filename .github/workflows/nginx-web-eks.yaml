@@ -5,7 +5,7 @@ name: Nginx Web EKS Deploy
 
 on:
   push:
-    branches: ["main", "ci/eks"]
+    branches: ["main", "ci/eks", "ci/eks-rust"]
     paths:
       - "nginx/web/**"
       - "eks_yaml/nginx-web/**"

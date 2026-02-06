@@ -5,7 +5,7 @@ name: Rust API EKS Deploy
 
 on:
   push:
-    branches: ["main", "ci/eks"]
+    branches: ["main", "ci/eks-rust"]
     paths:
       - "rust-api/**"
       - "eks_yaml/rust-api/**"
