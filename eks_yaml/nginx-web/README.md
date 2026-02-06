@@ -57,3 +57,4 @@ kubectl apply -f service.yaml
 ```bash
 kubectl get svc pista-svc-nginx-web
 ```
+---
