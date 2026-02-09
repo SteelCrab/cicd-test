@@ -8,7 +8,7 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-type: "external"
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "instance"
     service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-    service.beta.kubernetes.io/aws-load-balancer-security-groups: "<LB_SG_ID>"
+    service.beta.kubernetes.io/aws-load-balancer-security-groups: "sg-0596539778101229d"
 spec:
   type: LoadBalancer
   selector:
