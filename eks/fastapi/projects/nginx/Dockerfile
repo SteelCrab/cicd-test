@@ -14,5 +14,4 @@ ENV LC_ALL=C.UTF-8
 
 EXPOSE 80
 
-
 CMD ["nginx", "-g", "daemon off;"]
