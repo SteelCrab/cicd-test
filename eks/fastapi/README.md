@@ -194,8 +194,8 @@ GitHub Actions + ArgoCD를 통해 자동 빌드 및 EKS 배포함.
 
 | 워크플로우 | 트리거 경로 | 설명 |
 | :--- | :--- | :--- |
-| `fastapi-eks.yml` | `eks/fastapi/projects/fastapi/**`, `eks/fastapi/kubernetes/fastapi-app/**` | FastAPI 빌드 → ECR 푸시 → ArgoCD 배포 |
-| `nginx-web-eks.yml` | `eks/fastapi/projects/nginx/**`, `eks/fastapi/kubernetes/nginx-web/**` | Nginx 빌드 → ECR 푸시 → ArgoCD 배포 |
+| `fastapi-eks-argocd.yml` | `eks/fastapi/projects/fastapi/**`, `eks/fastapi/kubernetes/fastapi-app/**` | FastAPI 빌드 → ECR 푸시 → ArgoCD 배포 |
+| `nginx-web-eks-argocd.yml` | `eks/fastapi/projects/nginx/**`, `eks/fastapi/kubernetes/nginx-web/**` | Nginx 빌드 → ECR 푸시 → ArgoCD 배포 |
 
 ### 배포 흐름
 

@@ -1,16 +1,16 @@
-name: fastapi-eks pipeline
+name: nginx-web-eks-argocd pipeline
 
 on:
   push:
     branches: ["main", "ci/eks-fastapi"]
     paths:
-      - "eks/fastapi/projects/fastapi/**"
-      - "eks/fastapi/kubernetes/fastapi-app/**"
+      - "eks/fastapi/projects/nginx/**"
+      - "eks/fastapi/kubernetes/nginx-web/**"
   pull_request:
     branches: ["main", "ci/eks-fastapi"]
     paths:
-      - "eks/fastapi/projects/fastapi/**"
-      - "eks/fastapi/kubernetes/fastapi-app/**"
+      - "eks/fastapi/projects/nginx/**"
+      - "eks/fastapi/kubernetes/nginx-web/**"
 
 permissions:
   contents: read
@@ -21,22 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.14
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.14"
-      - name: Install dependencies
+      - name: Build Docker image (test)
         run: |
-          python -m pip install --upgrade pip
-          pip install flake8 pytest
-          pip install -r eks/fastapi/projects/fastapi/requirements.txt
-      - name: Lint with flake8
-        run: |
-          flake8 eks/fastapi/projects/fastapi --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 eks/fastapi/projects/fastapi --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - name: Test with pytest
-        run: |
-          cd eks/fastapi/projects/fastapi && pytest
+          docker build -t nginx-web-test ./eks/fastapi/projects/nginx/
 
   deploy:
     runs-on: ubuntu-latest
@@ -64,13 +51,13 @@ jobs:
       - name: Build and push Docker image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY_FASTAPI_APP }}"
+          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY_NGINX_WEB }}"
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            ./eks/fastapi/projects/fastapi/
+            ./eks/fastapi/projects/nginx/
 
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -88,20 +75,21 @@ jobs:
           argocd login "${{ secrets.ARGOCD_SERVER }}" \
             --username admin \
             --password "${{ secrets.ARGOCD_PASSWORD }}" \
-            --grpc-web
+            --grpc-web \
+            --insecure
 
       # 6. ArgoCD 이미지 태그 업데이트 및 Sync
       - name: Deploy via ArgoCD
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY_FASTAPI_APP }}"
+          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY_NGINX_WEB }}"
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          argocd app set fastapi-app \
+          argocd app set nginx-web \
             --kustomize-image "$ECR_REGISTRY/$ECR_REPOSITORY=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          argocd app sync fastapi-app
+          argocd app sync nginx-web
 
       # 7. 배포 완료 대기
       - name: Wait for deployment
         run: |
-          argocd app wait fastapi-app --timeout 120
+          argocd app wait nginx-web --timeout 120
