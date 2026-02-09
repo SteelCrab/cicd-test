@@ -103,4 +103,4 @@ jobs:
       # 8. 배포 완료 대기
       - name: Wait for deployment
         run: |
-          argocd app wait nginx-web --timeout 120
+          argocd app wait nginx-web --timeout 300

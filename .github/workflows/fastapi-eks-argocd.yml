@@ -116,4 +116,4 @@ jobs:
       # 8. 배포 완료 대기
       - name: Wait for deployment
         run: |
-          argocd app wait fastapi-app --timeout 120
+          argocd app wait fastapi-app --timeout 300
