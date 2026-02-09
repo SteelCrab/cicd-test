@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pista-svc-nginx-web
+  labels:
+    app: nginx-web
+  annotations:
+    # AWS LoadBalancerController 옵션
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "instance"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-security-groups: "<LB_SG_ID>"
+spec:
+  type: LoadBalancer
+  selector:
+    # Deployment의 matchLabels와 일치해야 함
+    app: nginx-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP

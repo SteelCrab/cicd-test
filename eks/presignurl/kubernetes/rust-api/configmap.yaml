@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rust-api-config
+data:
+  S3_BUCKET_NAME: "<S3_BUCKET_NAME>"
+  AWS_REGION: "ap-southeast-1"
+  PRESIGNED_EXPIRY: "3600"

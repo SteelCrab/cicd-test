@@ -1,0 +1,47 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: <CLUSTER_NAME>
+  region: <REGION>
+  version: "<K8S_VERSION>"
+
+vpc:
+  id: "<VPC_ID>"
+  subnets:
+    public:
+      <REGION>a: { id: "<PUBLIC_SUBNET_A>" }
+      <REGION>c: { id: "<PUBLIC_SUBNET_C>" }
+      <REGION>d: { id: "<PUBLIC_SUBNET_D>" }
+    private:
+      <REGION>a: { id: "<PRIVATE_SUBNET_A>" }
+      <REGION>c: { id: "<PRIVATE_SUBNET_C>" }
+      <REGION>d: { id: "<PRIVATE_SUBNET_D>" }
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+managedNodeGroups:
+  - name: <NODE_GROUP_NAME>
+    instanceType: <INSTANCE_TYPE>
+    minSize: <MIN_SIZE>
+    maxSize: <MAX_SIZE>
+    desiredCapacity: <DESIRED_CAPACITY>
+    volumeSize: <VOLUME_SIZE>
+    privateNetworking: true
+    securityGroups:
+      attachIDs:
+        - <NODE_SG_ID>       # 노드 보안 그룹
+        - <LB_SG_ID>         # LB 보안 그룹 (NLB instance 타입용)
+    iam:
+      withAddonPolicies:
+        imageBuilder: true    # ECR 이미지 접근 권한
+        autoScaler: true      # Cluster Autoscaler 권한
+        albIngress: true      # 로드밸런서 권한
+        cloudWatch: true      # CloudWatch 로그 권한
+        ebs: true             # EBS 볼륨 사용 권한
+        certManager: true     # SSL/TLS 인증서 자동 발급 권한
+        externalDNS: true     # 도메인(Route53) 자동 연결 권한
+
+iam:
+  withOIDC: true
