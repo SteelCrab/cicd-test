@@ -16,5 +16,6 @@ Thumbs.db
 .idea/
 build/
 dist/
+target/
 *.egg-info/
 .claude

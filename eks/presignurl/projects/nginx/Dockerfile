@@ -1,14 +1,17 @@
 FROM nginx:alpine
 
-# 설정 파일
+# 설정 파일 복사
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY default.conf /etc/nginx/conf.d/default.conf
 
 WORKDIR /usr/share/nginx/html
 
-# 기존 파일 삭제 및 html 폴더 내용 복사
+# 기존 기본 파일 삭제
 RUN rm -rf ./*
-COPY --chown=nginx:nginx . .
+
+# 정적 리소스 복사 (html 폴더의 모든 내용을 루트로)
+COPY --chown=nginx:nginx html/ .
+COPY --chown=nginx:nginx images/ ./images/
 
 # 환경 변수 설정
 ENV LANG=C.UTF-8

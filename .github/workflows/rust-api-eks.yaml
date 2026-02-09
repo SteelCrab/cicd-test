@@ -1,0 +1,163 @@
+# Rust API - ECR Build & EKS Deploy Pipeline
+# This workflow builds Rust API, pushes to ECR, and deploys to EKS
+
+name: Rust API EKS Deploy
+
+on:
+  push:
+    branches: ["main", "ci/eks-rust"]
+    paths:
+      - "eks/presignurl/projects/rs-presign/**"
+      - "eks/presignurl/kubernetes/rust-api/**"
+      - "eks/presignurl/overlays/production/rust-api/**"
+      - ".github/workflows/rust-api-eks.yaml"
+  workflow_dispatch:
+    inputs:
+      deploy_only:
+        description: 'Skip build and deploy directly'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+  id-token: write  # OIDC 인증용
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_RUST_API }}
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
+
+jobs:
+  # ============================================
+  # 1단계: 빌드 및 테스트
+  # ============================================
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            eks/presignurl/projects/rs-presign/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        working-directory: eks/presignurl/projects/rs-presign
+        run: |
+          cargo test --release
+
+      - name: Run clippy
+        working-directory: eks/presignurl/projects/rs-presign
+        run: |
+          cargo clippy -- -D warnings
+
+  # ============================================
+  # 2단계: Docker 빌드 및 ECR 푸시
+  # ============================================
+  docker-build:
+    name: Docker Build & Push to ECR
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha_short }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.meta.outputs.sha_short }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+                       -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                       ./eks/presignurl/projects/rs-presign/
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          echo "✅ Pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  # ============================================
+  # 3단계: EKS 배포
+  # ============================================
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: docker-build
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy to EKS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.docker-build.outputs.image_tag }}
+        run: |
+          # Kustomize로 이미지 태그 설정 후 배포
+          cd eks/presignurl/overlays/production/rust-api
+          kustomize edit set image \
+            "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/rust-api=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          kubectl apply -k . -n $K8S_NAMESPACE
+
+          # 배포 상태 확인
+          kubectl rollout status deployment/rust-api -n $K8S_NAMESPACE --timeout=120s
+
+      - name: Verify deployment
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment rust-api -n $K8S_NAMESPACE
+          echo ""
+          echo "=== Pods Status ==="
+          kubectl get pods -l app=rust-api -n $K8S_NAMESPACE
+          echo ""
+          echo "=== Service Status ==="
+          kubectl get svc rust-api -n $K8S_NAMESPACE

@@ -1,0 +1,56 @@
+# eksctl 설정 파일 버전 정의
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+# 클러스터 기본 정보 설정
+metadata:
+  name: pista-cluster
+  region: ap-southeast-1
+  version: "1.32"
+
+# 기존 VPC 및 서브넷 활용 설정
+vpc:
+  id: <VPC_ID>
+  # 클러스터 API 서버 접근 제어
+  clusterEndpoints:
+    publicAccess: true # 외부에서 kubectl 접근 허용
+    privateAccess: true # VPC 내부에서 kubectl 접근 허용
+  # 특정 IP만 퍼블릭 API 서버에 접근 허용 (보안 강화) - 선택
+  #publicAccessCIDRs:
+  #  - "<ALLOWED_IP>/32"
+  subnets:
+    # 외부 로드밸런서가 위치할 퍼블릭 서브넷 (elb 태그 필요)
+    public:
+      ap-southeast-1a: { id: <PUBLIC_SUBNET_1A> }
+      ap-southeast-1b: { id: <PUBLIC_SUBNET_1B> }
+      ap-southeast-1c: { id: <PUBLIC_SUBNET_1C> }
+    # 실제 워커 노드가 위치할 프라이빗 서브넷 (internal-elb 태그 필요)
+    private:
+      ap-southeast-1a: { id: <PRIVATE_SUBNET_1A> }
+      ap-southeast-1b: { id: <PRIVATE_SUBNET_1B> }
+      ap-southeast-1c: { id: <PRIVATE_SUBNET_1C> }
+
+# 관리형 노드 그룹(Managed Node Group) 설정
+managedNodeGroups:
+  - name: pista-node-group
+    instanceType: t3.medium
+    minSize: 1 # 최소 1대 유지
+    maxSize: 3 # 최대 3대까지 확장 가능
+    desiredCapacity: 3
+    volumeSize: 20
+    privateNetworking: true
+    securityGroups:
+      attachIDs: [<NODE_SG_ID>]
+    iam:
+      withAddonPolicies:
+        imageBuilder: true # ECR 이미지 접근 권한
+        autoScaler: true # Cluster Autoscaler 권한
+        albIngress: true # 로드밸런서 권한
+        cloudWatch: true # CloudWatch 로그 권한
+        ebs: true # EBS 불륨 사용 권한
+        certManager: true # SSL/TLS 인증서 자동 발급 권한
+        externalDNS: true # 도메인(Route53) 자동 연결 권한
+
+# IAM OIDC 프로바이더 설정
+iam:
+  withOIDC: true
