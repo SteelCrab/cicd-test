@@ -3,5 +3,5 @@ kind: Kustomization
 resources:
   - ../../../kubernetes/nginx-web
 images:
-  - name: __ACCOUNT_ID__.dkr.ecr.ap-southeast-1.amazonaws.com/nginx-web
+  - name: nginx-web
     newTag: latest

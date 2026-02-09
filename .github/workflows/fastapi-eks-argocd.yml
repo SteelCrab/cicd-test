@@ -91,7 +91,15 @@ jobs:
             --grpc-web \
             --insecure
 
-      # 6. ArgoCD 이미지 태그 업데이트 및 Sync
+      # 6. ArgoCD Private 레포 등록
+      - name: Add private repo to ArgoCD
+        run: |
+          argocd repo add https://github.com/${{ github.repository }}.git \
+            --username ${{ secrets.GH_USERNAME }} \
+            --password ${{ secrets.GH_PAT }} \
+            --upsert
+
+      # 7. ArgoCD 이미지 태그 업데이트 및 Sync
       - name: Deploy via ArgoCD
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -99,7 +107,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           argocd app set fastapi-app \
-            --kustomize-image "$ECR_REGISTRY/$ECR_REPOSITORY=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+            --kustomize-image "fastapi-app=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           argocd app sync fastapi-app
 
       # 7. 배포 완료 대기

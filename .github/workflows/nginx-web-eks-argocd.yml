@@ -86,7 +86,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           argocd app set nginx-web \
-            --kustomize-image "$ECR_REGISTRY/$ECR_REPOSITORY=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+            --kustomize-image "nginx-web=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           argocd app sync nginx-web
 
       # 7. 배포 완료 대기

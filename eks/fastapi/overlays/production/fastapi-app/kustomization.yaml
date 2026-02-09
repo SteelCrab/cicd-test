@@ -3,5 +3,5 @@ kind: Kustomization
 resources:
   - ../../../kubernetes/fastapi-app
 images:
-  - name: __ACCOUNT_ID__.dkr.ecr.ap-southeast-1.amazonaws.com/fastapi-app
+  - name: fastapi-app
     newTag: latest
