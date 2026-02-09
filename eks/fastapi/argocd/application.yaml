@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fastapi-app
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SteelCrab/cicd-test.git
+    targetRevision: ci/eks-fastapi
+    path: eks/fastapi/overlays/production/fastapi-app
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-web
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/SteelCrab/cicd-test.git
+    targetRevision: ci/eks-fastapi
+    path: eks/fastapi/overlays/production/nginx-web
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

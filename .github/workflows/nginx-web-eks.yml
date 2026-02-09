@@ -1,0 +1,94 @@
+name: nginx-web-eks pipeline
+
+on:
+  push:
+    branches: ["main", "ci/eks-fastapi"]
+    paths:
+      - "eks/fastapi/projects/nginx/**"
+      - "eks/fastapi/kubernetes/nginx-web/**"
+  pull_request:
+    branches: ["main", "ci/eks-fastapi"]
+    paths:
+      - "eks/fastapi/projects/nginx/**"
+      - "eks/fastapi/kubernetes/nginx-web/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image (test)
+        run: |
+          docker build -t nginx-web-test ./eks/fastapi/projects/nginx/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. AWS 권한 설정
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws-secret-access-key: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          aws-region: "${{ secrets.AWS_REGION }}"
+
+      # 2. Amazon ECR 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 3. Docker 이미지 빌드 및 ECR 푸시
+      - name: Build and push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY_NGINX_WEB }}"
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            ./eks/fastapi/projects/nginx/
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # 4. ArgoCD CLI 설치
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      # 5. ArgoCD 로그인
+      - name: ArgoCD Login
+        run: |
+          argocd login "${{ secrets.ARGOCD_SERVER }}" \
+            --username admin \
+            --password "${{ secrets.ARGOCD_PASSWORD }}" \
+            --grpc-web
+
+      # 6. ArgoCD 이미지 태그 업데이트 및 Sync
+      - name: Deploy via ArgoCD
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: "${{ secrets.ECR_REPOSITORY_NGINX_WEB }}"
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          argocd app set nginx-web \
+            --kustomize-image "$ECR_REGISTRY/$ECR_REPOSITORY=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          argocd app sync nginx-web
+
+      # 7. 배포 완료 대기
+      - name: Wait for deployment
+        run: |
+          argocd app wait nginx-web --timeout 120
