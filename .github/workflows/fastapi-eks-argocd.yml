@@ -43,6 +43,8 @@ jobs:
     needs: build
     if: github.event_name == 'push'
     environment: production
+    env:
+      GH_PAT: ${{ secrets.GH_PAT }}
 
     steps:
       - uses: actions/checkout@v4
@@ -91,12 +93,13 @@ jobs:
             --grpc-web \
             --insecure
 
-      # 6. ArgoCD Private 레포 등록
+      # 6. Private 레포인 경우 ArgoCD에 레포 등록 (GH_PAT secret 설정 시에만 실행)
       - name: Add private repo to ArgoCD
+        if: env.GH_PAT != ''
         run: |
           argocd repo add https://github.com/${{ github.repository }}.git \
-            --username ${{ secrets.GH_USERNAME }} \
-            --password ${{ secrets.GH_PAT }} \
+            --username "${{ secrets.GH_USERNAME }}" \
+            --password "${{ secrets.GH_PAT }}" \
             --upsert
 
       # 7. ArgoCD 이미지 태그 업데이트 및 Sync
@@ -110,7 +113,7 @@ jobs:
             --kustomize-image "fastapi-app=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           argocd app sync fastapi-app
 
-      # 7. 배포 완료 대기
+      # 8. 배포 완료 대기
       - name: Wait for deployment
         run: |
           argocd app wait fastapi-app --timeout 120
